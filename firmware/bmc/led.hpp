@@ -1,5 +1,5 @@
 /**
- *  Board management controller for a battery powered RPi computer
+ *  Board management controller (BMC) for a battery powered RPi computer
  *  Copyright (C) 2019  Andreas Stöckel
  *
  *  This program is free software: you can redistribute it and/or modify
