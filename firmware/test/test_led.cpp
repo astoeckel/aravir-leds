@@ -162,6 +162,20 @@ void test_ctrl_ramp_saturated() {
 	}
 }
 
+template<uint8_t N_LEDS>
+void test_multi_led() {
+	MultiLED<N_LEDS> leds;
+	EXPECT_EQ(N_LEDS, leds.i2c_read(leds.REG_N_LEDS));
+	EXPECT_EQ(LED::N_REGS, leds.i2c_read(leds.REG_LED_SIZE));
+	uint8_t addr = leds.ADDR_BASE;
+	for (uint8_t i = 0; i < leds.size(); i++) {
+		for (uint8_t j = 0; j < LED::N_REGS; j++) {
+			ASSERT_EQ(i, leds.i2c_addr_to_led_idx(addr));
+			addr++;
+		}
+	}
+}
+
 
 int main() {
 	RUN(test_paused);
@@ -169,4 +183,9 @@ int main() {
 	RUN(test_ctrl_wrap);
 	RUN(test_ctrl_ramp);
 	RUN(test_ctrl_ramp_saturated);
+	RUN(test_multi_led<0>);
+	RUN(test_multi_led<1>);
+	RUN(test_multi_led<2>);
+	RUN(test_multi_led<3>);
+	RUN(test_multi_led<8>);
 }

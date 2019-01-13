@@ -298,6 +298,11 @@ public:
 	static constexpr uint8_t REG_STATUS = offsetof(Registers, status);
 
 	/**
+	 * Total number of registers.
+	 */
+	static constexpr uint8_t N_REGS = sizeof(Registers);
+
+	/**
 	 * Create and initialises a new LED instance. Initially the controller is
 	 * not running, the phase is zero, and the brightness is set to zero.
 	 */
@@ -373,6 +378,11 @@ public:
 	Ctrl &operator[](uint8_t i) { return m_regs.regs.ctrl[i]; }
 
 	/**
+	 * Number of control words.
+	 */
+	static constexpr uint8_t size() { return N_CTRL_WORDS; }
+
+	/**
 	 * Transitions the controller to the "running" state. In particular, this
 	 * function will reload the current instruction. Does nothing if the
 	 * controller is already running.
@@ -445,6 +455,156 @@ public:
 	{
 		addr++;
 		if (addr >= sizeof(Registers)) {
+			addr = 0;
+		}
+		return addr;
+	}
+};
+
+/**
+ * A set of multiple LED instances that act as a single I2C device.
+ */
+template <uint8_t N_LEDS>
+class MultiLED {
+private:
+	LED m_leds[N_LEDS];
+
+public:
+	/**
+	 * Read-only register containing the number of LEDs.
+	 */
+	static constexpr uint8_t REG_N_LEDS = 0;
+
+	/**
+	 * Read-only register returning the number of registers per LED.
+	 */
+	static constexpr uint8_t REG_LED_SIZE = 1;
+
+	/**
+	 * Address offset of the first LED.
+	 */
+	static constexpr uint8_t ADDR_BASE = 2;
+
+	/**
+	 * Maximum address.
+	 */
+	static constexpr uint8_t N_REGS = ADDR_BASE + LED::N_REGS * N_LEDS;
+
+	/**
+	 * Address offset of the LED with the specified index.
+	 */
+	static constexpr uint8_t led_addr_base(uint8_t led_idx)
+	{
+		return ADDR_BASE + LED::N_REGS * led_idx;
+	}
+
+	/**
+	 * Returns a const reference at the i-th LED.
+	 */
+	const LED &operator[](uint8_t i) const { return m_leds[i]; }
+
+	/**
+	 * Returns a reference at the i-th LED.
+	 */
+	LED &operator[](uint8_t i) { return m_leds[i]; }
+
+	/**
+	 * Returns the number of LEDs.
+	 */
+	static constexpr uint8_t size() { return N_LEDS; }
+
+	/**
+	 * Forwards the state of all leds in the multi LED group.
+	 */
+	void step()
+	{
+		for (uint8_t i = 0; i < N_LEDS; i++) {
+			m_leds[i].step();
+		}
+	}
+
+	/**
+	 * Executes the state machine for all LEDs.
+	 */
+	void run() {
+		for (uint8_t i = 0; i < N_LEDS; i++) {
+			m_leds[i].run();
+		}
+	}
+
+	/**
+	 * Stops the state machine for all LEDs.
+	 */
+	void stop() {
+		for (uint8_t i = 0; i < N_LEDS; i++) {
+			m_leds[i].stop();
+		}
+	}
+
+	/**************************************************************************
+	 * I2C Interface                                                          *
+	 **************************************************************************/
+
+	/**
+	 * Converts an i2c address to an LED index without division by using binary
+	 * search. This should just be compiled into a tree of if/then/else
+	 * statements. The given address must be greater or equal to ADDR_BASE and
+	 * smaller than N_REGS.
+	 */
+	template <uint8_t MIN_LED = 0, uint8_t MAX_LED = N_LEDS>
+	static constexpr uint8_t i2c_addr_to_led_idx(uint8_t addr)
+	{
+		constexpr uint8_t MID_LED = MIN_LED + (MAX_LED - MIN_LED) / 2;
+		if (MIN_LED > 0U && MIN_LED == MAX_LED) {
+			return MIN_LED - 1U;
+		}
+		else if (addr - ADDR_BASE < MID_LED * LED::N_REGS) {
+			return i2c_addr_to_led_idx<MIN_LED, MID_LED>(addr);
+		}
+		else {
+			return i2c_addr_to_led_idx<MID_LED + 1U, MAX_LED>(addr);
+		}
+	}
+
+	/**
+	 * Reads the byte stored at the given address.
+	 */
+	uint8_t i2c_read(uint8_t addr) const
+	{
+		if (addr == REG_N_LEDS) {
+			return N_LEDS;
+		}
+		else if (addr == REG_LED_SIZE) {
+			return LED::N_REGS;
+		}
+		else if (addr >= ADDR_BASE && addr < N_REGS) {
+			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
+			return m_leds[led_idx].i2c_read(addr - led_addr_base(led_idx));
+		}
+		else {
+			return 0;
+		}
+	}
+
+	/**
+	 * Writes to the given address.
+	 */
+	void i2c_write(uint8_t addr, uint8_t value)
+	{
+		if (addr >= ADDR_BASE && addr < N_REGS) {
+			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
+			m_leds[led_idx].i2c_write(addr - led_addr_base(led_idx),
+			                          value);
+		}
+	}
+
+	/**
+	 * Returns the next I2C address.
+	 */
+	uint8_t i2c_next_addr(uint8_t addr)
+	{
+		addr++;
+		if (addr >= N_REGS) {
 			addr = 0;
 		}
 		return addr;
