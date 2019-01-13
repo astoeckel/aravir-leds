@@ -4,8 +4,8 @@ PWD := $(shell pwd)
 obj-m := leds-rpibmc.o
 
 all:
-	make -C /lib/modules/$(KVERSION)/build/ M=$(PWD) modules
+	+make -C /lib/modules/$(KVERSION)/build/ M=$(PWD) modules
 clean:
-	make -C /lib/modules/$(KVERSION)/build/ M=$(PWD) clean
+	+make -C /lib/modules/$(KVERSION)/build/ M=$(PWD) clean
 
 
