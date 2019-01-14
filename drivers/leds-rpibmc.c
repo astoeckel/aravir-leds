@@ -105,10 +105,6 @@ static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
 	u8 mask[RPIBMC_LEDS_MAX_NUM_BYTES + 1];
 	int i, offs = 0, len = 0, end = 0, err = 0;
 
-	dev_info(&led->client->dev,
-	         "%s: %s rpibmc_leds_write(led, %d, %d, %d, ctrl, %d)\n", __func__,
-	         led->ldev.name, status, brightness, phase, ctrl_size);
-
 	/* Assemble the masked stream */
 	rpibmc_leds_append_stream(regs, mask, &end, status, status >= 0);
 	rpibmc_leds_append_stream(regs, mask, &end, brightness, brightness >= 0);
@@ -130,10 +126,6 @@ static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
 		   Limit the maximum transaction size to 32 for SMBus compatibility. */
 		if (mask[offs + len] || (len == 32)) {
 			if (len > 0) {
-				dev_info(&led->client->dev,
-				         "%s: %s regmap_bulk_write addr=%d len=%d offs=%d\n",
-				         __func__, led->ldev.name, led->addr + offs, len, offs);
-
 				err = regmap_bulk_write(led->regmap, led->addr + offs,
 				                            &regs[offs], len);
 				if (err != 0) {
