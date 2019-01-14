@@ -556,7 +556,7 @@ public:
 	{
 		constexpr uint8_t MID_LED = MIN_LED + (MAX_LED - MIN_LED) / 2;
 		if (MIN_LED > 0U && MIN_LED == MAX_LED) {
-			return MIN_LED - 1U;
+			return uint8_t(MIN_LED - 1U); /* Always >= 0 */
 		}
 		else if (addr - ADDR_BASE < MID_LED * LED::N_REGS) {
 			return i2c_addr_to_led_idx<MIN_LED, MID_LED>(addr);
