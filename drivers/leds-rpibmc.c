@@ -10,28 +10,26 @@
  * of the License, or (at your option) any later version.
  */
 
-/* This code is based on the lp3944 I2C driver */
+/* This code is loosely based on the lp3944 I2C driver */
 
-#include <linux/module.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/leds.h>
+#include <linux/module.h>
 #include <linux/regmap.h>
-#include <linux/mutex.h>
-#include <linux/slab.h>
 
 /******************************************************************************
  * CONSTANTS AND DATASTRUCTURES                                               *
  ******************************************************************************/
 
-#define RPIBMC_LEDS_REG_NUM_LEDS 0x00 /* Number of LEDS (Read Only) */
+#define RPIBMC_LEDS_REG_NUM_LEDS 0x00  /* Number of LEDS (Read Only) */
 #define RPIBMC_LEDS_REG_NUM_BYTES 0x01 /* Bytes per LED (Read Only) */
-#define RPIBMC_LEDS_REG_LED_BASE 0x02 /* Offset address for the first LED */
+#define RPIBMC_LEDS_REG_LED_BASE 0x02  /* Offset address for the first LED */
 
-#define RPIBMC_LEDS_REG_LED_STATUS 0x00 /* LED status register */
+#define RPIBMC_LEDS_REG_LED_STATUS 0x00     /* LED status register */
 #define RPIBMC_LEDS_REG_LED_BRIGHTNESS 0x01 /* Current brightness register */
-#define RPIBMC_LEDS_REG_LED_PHASE 0x02 /* Current phase */
-#define RPIBMC_LEDS_REG_LED_CTRL_BASE 0x03 /* Control words base offset */
+#define RPIBMC_LEDS_REG_LED_PHASE 0x02      /* Current phase */
+#define RPIBMC_LEDS_REG_LED_CTRL_BASE 0x03  /* Control words base offset */
 
 /* Maximum number of LEDS that can be managed by the RPIBMC */
 #define RPIBMC_LEDS_MAX 8U
@@ -40,7 +38,7 @@
 #define RPIBMC_LEDS_MAX_NUM_CTRL_WORDS 8U
 
 /* Maximum number of bytes used by a single LED */
-#define RPIBMC_LEDS_MAX_NUM_BYTES                                              \
+#define RPIBMC_LEDS_MAX_NUM_BYTES \
 	(RPIBMC_LEDS_REG_LED_CTRL_BASE + 2U * RPIBMC_LEDS_MAX_NUM_CTRL_WORDS)
 
 #define RPIBMC_LEDS_STATUS_RUN 0x80
@@ -58,95 +56,106 @@ struct rpibmc_leds_led_data {
 	u8 num_ctrl_words;
 	struct led_classdev ldev;
 	struct i2c_client *client;
+	struct regmap *regmap;
 };
 
 /* Information about all LEDs managed by the device */
 struct rpibmc_leds_data {
 	struct mutex lock;
-	struct i2c_client *client;
 	struct rpibmc_leds_led_data leds[RPIBMC_LEDS_MAX];
 	u8 leds_size;
 };
 
 /* Possible LED names */
 static const char *rpibmc_leds_names[RPIBMC_LEDS_MAX] = {
-	"rpibmc:led:1", "rpibmc:led:2", "rpibmc:led:3", "rpibmc:led:4",
-	"rpibmc:led:5", "rpibmc:led:6", "rpibmc:led:7", "rpibmc:led:8",
+    "rpibmc:led:1", "rpibmc:led:2", "rpibmc:led:3", "rpibmc:led:4",
+    "rpibmc:led:5", "rpibmc:led:6", "rpibmc:led:7", "rpibmc:led:8",
 };
 
 /******************************************************************************
  * I2C HELPER FUNCTIONS                                                       *
  ******************************************************************************/
 
-static void rpibmc_leds_append_stream(u8 *data, u8 *mask, int *ptr, u8 value,
-				      u8 valid)
+static void rpibmc_leds_append_stream(u8 *regs, u8 *mask, int *ptr, u8 value,
+                                      u8 valid)
 {
 	if (valid) {
-		data[*ptr] = value;
+		regs[*ptr] = value;
 		mask[*ptr] = 0;
-	} else {
+	}
+	else {
 		mask[*ptr] = 1;
 	}
 	(*ptr)++;
 }
 
 /**
- * Updates a single RPIBMC led. Setting one of the int values to a negative
+ * Updates a single RPIBMC LED. Setting one of the int values to a negative
  * value indicates that this particular register shouldn't be updated.
  */
 static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
-			     int brightness, int phase, u8 *ctrl, int ctrl_size)
+                             int brightness, int phase, u8 *ctrl, int ctrl_size)
 {
+	/* Fetch the controller data for access to the mutex lock */
+	struct rpibmc_leds_data *data = i2c_get_clientdata(led->client);
+
 	/* Temporary buffers containing the data that should be written to the I2C
 	   device in as few transactions as possible. */
-	u8 data[RPIBMC_LEDS_MAX_NUM_BYTES];
+	u8 regs[RPIBMC_LEDS_MAX_NUM_BYTES];
 	u8 mask[RPIBMC_LEDS_MAX_NUM_BYTES + 1];
-	int i, offs = 0, len = 0, end = 0, written;
+	int i, offs = 0, len = 0, end = 0, err = 0;
+
+	dev_info(&led->client->dev,
+	         "%s: %s rpibmc_leds_write(led, %d, %d, %d, ctrl, %d)\n", __func__,
+	         led->ldev.name, status, brightness, phase, ctrl_size);
 
 	/* Assemble the masked stream */
-	rpibmc_leds_append_stream(data, mask, &end, status, status >= 0);
-	rpibmc_leds_append_stream(data, mask, &end, brightness,
-				  brightness >= 0);
-	rpibmc_leds_append_stream(data, mask, &end, phase, phase >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, status, status >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, brightness, brightness >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, phase, phase >= 0);
 	for (i = 0; i < ctrl_size; i++) {
-		rpibmc_leds_append_stream(data, mask, &end, ctrl[i], 1);
+		rpibmc_leds_append_stream(regs, mask, &end, ctrl[i], 1);
 	}
 
-	/* Mark the last byte as invalid. This ensures that the below loop will
-	   exit. */
-	mask[end] = 0;
+	/* Mark the last byte as masked/invalid. This ensures that the below loop
+	   will exit. */
+	mask[end] = 1;
 
-	/* Send the data to the client in as few transactions as possible */
+	/* Prevent concurrent access to the I2C bus */
+	mutex_lock(&data->lock);
+
+	/* Send the registers to the client in as few transactions as possible */
 	while (offs <= end) {
 		/* If the given register value is masked, try to perform a transaction.
-		   The same holds if the number of bytes maximum number of bytes per
-		   transfer is 32, which is the maximum number of bytes that can be
-		   transfered on SMBus. */
+		   Limit the maximum transaction size to 32 for SMBus compatibility. */
 		if (mask[offs + len] || (len == 32)) {
 			if (len > 0) {
-				/* Send the last contiguous block of data to the client */
-				written = i2c_smbus_write_block_data(led->client,
-							   led->addr + offs,
-							   len, &data[offs]);
-				if (written < 0) {
-					return written; /* Forward the error code */
-				} else if (written == 0 || written > len) {
-					return EIO; /* Ensure progress */
+				dev_info(&led->client->dev,
+				         "%s: %s regmap_bulk_write addr=%d len=%d offs=%d\n",
+				         __func__, led->ldev.name, led->addr + offs, len, offs);
+
+				err = regmap_bulk_write(led->regmap, led->addr + offs,
+				                            &regs[offs], len);
+				if (err != 0) {
+					goto exit;
 				}
 
-				/* If the number of written bytes is smaller than requested,
-				   send the remaining data in the next transaction. */
-				len -= written;
-				offs += written;
-			} else {
+				offs += len;
+				len = 0;
+			}
+			else {
 				/* Skip masked bytes */
 				offs++;
 			}
-		} else {
+		}
+		else {
 			len++;
 		}
 	}
-	return 0;
+
+exit:
+	mutex_unlock(&data->lock);
+	return err;
 }
 
 /******************************************************************************
@@ -154,13 +163,10 @@ static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
  ******************************************************************************/
 
 static int rpibmc_leds_set_brightness(struct led_classdev *led_cdev,
-				      enum led_brightness brightness)
+                                      enum led_brightness brightness)
 {
 	/* Fetch the LED */
 	struct rpibmc_leds_led_data *led = ldev_to_led(led_cdev);
-
-	dev_dbg(&led->client->dev, "%s: %s, %d\n", __func__, led_cdev->name,
-		brightness);
 
 	/* Pause the pattern generator and just set the brightness */
 	return rpibmc_leds_write(led, 0, brightness, -1, NULL, 0);
@@ -179,25 +185,27 @@ static void rpibmc_leds_unregister_devices(struct rpibmc_leds_data *data)
 	data->leds_size = 0;
 }
 
-static int rpibmc_leds_configure(struct i2c_client *client,
-				 struct rpibmc_leds_data *data)
+static int rpibmc_leds_configure(struct i2c_client *client, struct regmap *regmap,
+                                 struct rpibmc_leds_data *data)
 {
 	int i, err, num_leds, num_bytes, num_ctrl_words, addr;
 
 	/* Read the number of leds from the attached device */
-	num_leds = i2c_smbus_read_byte_data(client, RPIBMC_LEDS_REG_NUM_LEDS);
-	if (num_leds < 0) {
-		return num_leds;
-	} else if (num_leds > RPIBMC_LEDS_MAX) {
+	err = regmap_read(regmap, RPIBMC_LEDS_REG_NUM_LEDS, &num_leds);
+	if (err) {
+		return err;
+	}
+	if (num_leds > RPIBMC_LEDS_MAX) {
 		return EINVAL;
 	}
 
 	/* Read the number of bytes per LED */
-	num_bytes = i2c_smbus_read_byte_data(client, RPIBMC_LEDS_REG_NUM_BYTES);
-	if (num_bytes < 0) {
-		return num_bytes;
-	} else if ((num_bytes < RPIBMC_LEDS_REG_LED_CTRL_BASE) ||
-		   (num_bytes * num_leds + RPIBMC_LEDS_REG_LED_BASE > 255)) {
+	err = regmap_read(regmap, RPIBMC_LEDS_REG_NUM_BYTES, &num_bytes);
+	if (err) {
+		return err;
+	}
+	if ((num_bytes < RPIBMC_LEDS_REG_LED_CTRL_BASE) ||
+	         (num_bytes * num_leds + RPIBMC_LEDS_REG_LED_BASE > 255)) {
 		return EINVAL;
 	}
 
@@ -213,6 +221,7 @@ static int rpibmc_leds_configure(struct i2c_client *client,
 		/* Populate the rpibmc_leds_led_data structure */
 		struct rpibmc_leds_led_data *led = &data->leds[i];
 		led->client = client;
+		led->regmap = regmap;
 		led->addr = addr;
 		led->num_ctrl_words = num_ctrl_words;
 
@@ -224,15 +233,15 @@ static int rpibmc_leds_configure(struct i2c_client *client,
 		led->ldev.flags = LED_CORE_SUSPENDRESUME;
 
 		/* Try to register the LED */
-		err = led_classdev_register(&client->dev, &led->ldev);
+		err = led_classdev_register(&led->client->dev, &led->ldev);
 		if (err < 0) {
-			dev_err(&client->dev, "couldn't register LED %s\n",
-				led->ldev.name);
+			dev_err(&client->dev, "couldn't register LED %s\n", led->ldev.name);
 			goto exit;
 		}
 
 		/* Increment the number of leds in the driver structure -- this
-		   corresponds to the number of actually registered leds */
+		   corresponds to the number of actually registered leds and is used
+		   by rpibmc_leds_unregister_devices() */
 		data->leds_size++;
 
 		/* Compute the start address of the next LED */
@@ -250,32 +259,38 @@ exit:
  * leds and address offsets from the device.
  */
 static int rpibmc_leds_probe(struct i2c_client *client,
-			     const struct i2c_device_id *id)
+                             const struct i2c_device_id *id)
 {
+	struct regmap *regmap;
+	static const struct regmap_config config = {
+		.reg_bits = 8,
+		.val_bits = 8,
+		.max_register = 0xFF,
+	};
 	struct rpibmc_leds_data *data;
 	int err;
 
-	/* Let's see whether this adapter can support what we need. */
-	if (!i2c_check_functionality(client->adapter,
-				     I2C_FUNC_SMBUS_WRITE_BLOCK_DATA)) {
-		dev_err(&client->dev, "insufficient functionality!\n");
-		return -ENODEV;
+	/* Setup the regmap */
+	regmap = devm_regmap_init_i2c(client, &config);
+	if (IS_ERR(regmap)) {
+		dev_err(&client->dev, "%s: regmap allocation failed: %ld\n", __func__,
+		        PTR_ERR(regmap));
+		return PTR_ERR(regmap);
 	}
 
 	/* Allocate memory for the rpibmc_leds_data struct */
-	data = devm_kzalloc(&client->dev, sizeof(struct rpibmc_leds_data),
-			    GFP_KERNEL);
+	data =
+	    devm_kzalloc(&client->dev, sizeof(struct rpibmc_leds_data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
 	/* Initialize rpibmc_leds_data and associate the struct with the I2C
 	   client. */
 	mutex_init(&data->lock);
-	data->client = client;
 	i2c_set_clientdata(client, data);
 
 	/* Read information about the LEDs from the device */
-	err = rpibmc_leds_configure(client, data);
+	err = rpibmc_leds_configure(client, regmap, data);
 	if (err < 0)
 		return err;
 
@@ -299,19 +314,18 @@ static int rpibmc_leds_remove(struct i2c_client *client)
  * MODULE REGISTRATION                                                        *
  ******************************************************************************/
 
-static const struct i2c_device_id rpibmc_leds_id[] = { { "rpibmc-leds", 0 },
-						       {} };
+static const struct i2c_device_id rpibmc_leds_id[] = {{"rpibmc-leds", 0}, {}};
 
 MODULE_DEVICE_TABLE(i2c, rpibmc_leds_id);
 
 static struct i2c_driver rpibmc_driver = {
-	.driver =
-	    {
-	        .name = "rpibmc-leds",
-	    },
-	.probe = rpibmc_leds_probe,
-	.remove = rpibmc_leds_remove,
-	.id_table = rpibmc_leds_id,
+    .driver =
+        {
+            .name = "rpibmc-leds",
+        },
+    .probe = rpibmc_leds_probe,
+    .remove = rpibmc_leds_remove,
+    .id_table = rpibmc_leds_id,
 };
 
 module_i2c_driver(rpibmc_driver);
