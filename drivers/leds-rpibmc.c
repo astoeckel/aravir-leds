@@ -269,6 +269,10 @@ static int rpibmc_leds_blink_set(struct led_classdev *led_cdev,
 	/* Mark the last instruction as "return" instruction */
 	ctrl[i - 1].brightness |= RPIBMC_LEDS_CTRL_RETURN;
 
+	/* Tell the class driver the actual blink pattern duration that was used */
+	*delay_on = *delay_on - d_on_rem / 1000;
+	*delay_off = *delay_off - d_off_rem / 1000;
+
 	/* Send the pattern to the LED */
 	return rpibmc_leds_write(
 		led, RPIBMC_LEDS_STATUS_RUN | RPIBMC_LEDS_STATUS_BLINK, -1, -1, -1,
