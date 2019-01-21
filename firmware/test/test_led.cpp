@@ -113,12 +113,12 @@ void test_ctrl_ramp() {
 	EXPECT_EQ(128, led.brightness());
 
 	for (uint8_t i = 0; i < 128; i++) {
-		for (uint8_t i = 0; i < 26; i++) {
+		for (uint8_t i = 0; i < 25; i++) {
 			ASSERT_LT(3, led.brightness());
 			led.step();
 			ASSERT_GT(128, led.brightness());
 		}
-		EXPECT_EQ(2, led.brightness());
+		EXPECT_EQ(3, led.brightness());
 
 		for (uint8_t i = 0; i < 4; i++) {
 			led.step();
@@ -152,7 +152,7 @@ void test_ctrl_ramp_saturated() {
 			ASSERT_GT(255, led.brightness());
 			led.step();
 		}
-		ASSERT_EQ(254, led.brightness());
+		ASSERT_EQ(255, led.brightness());
 
 		for (uint8_t i = 0; i < 51; i++) {
 			ASSERT_LT(0, led.brightness());
