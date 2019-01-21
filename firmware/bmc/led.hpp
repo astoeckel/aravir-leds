@@ -217,14 +217,6 @@ private:
 		uint8_t phase;
 
 		/**
-		 * The pattern buffer will always write the current target brightness to
-		 * this register. If BIT_STATUS_BLINK is not set, it will be transfered
-		 * to the brightness register. If BIT_STATUS_BLINK is set, it will be
-		 * transfered to the "mask" register.
-		 */
-		uint8_t pattern_buf;
-
-		/**
 		 * Program memory defining the LED blink pattern.
 		 */
 		Ctrl ctrl[N_CTRL_WORDS];
@@ -238,6 +230,14 @@ private:
 		Registers regs;
 		uint8_t mem[sizeof(Registers)];
 	} m_regs;
+
+	/**
+	 * The pattern buffer will always write the current target brightness to
+	 * this register. If BIT_STATUS_BLINK is not set, it will be transfered
+	 * to the brightness register. If BIT_STATUS_BLINK is set, it will be
+	 * transfered to the "mask" register. This register is not exposed via I2C.
+	 */
+	uint8_t m_pattern_buf;
 
 	/**************************************************************************
 	 * Helper functions                                                       *
@@ -287,9 +287,9 @@ private:
 		// Transfer the pattern buffer to either the "mask" or the "brightness"
 		// register
 		if (r.status & BIT_STATUS_BLINK) {
-			r.mask = r.pattern_buf;
+			r.mask = m_pattern_buf;
 		} else {
-			r.brightness = r.pattern_buf;
+			r.brightness = m_pattern_buf;
 		}
 	}
 
@@ -325,13 +325,13 @@ private:
 		if (c.delay & BIT_CTRL_DELAY_IS_RAMP) {
 			// In ramp mode, phase encodes the difference between the current
 			// brightness value and the target brightness
-			r.phase = delta(brightness, r.pattern_buf);
+			r.phase = delta(brightness, m_pattern_buf);
 		}
 		else {
 			// In delay mode, phase encodes the remaining delay, brightness
 			// is constant
 			r.phase = c.delay & MASK_CTRL_DELAY;
-			r.pattern_buf = brightness;
+			m_pattern_buf = brightness;
 		}
 
 		// Transfer the pattern_buf to the output registers
@@ -360,11 +360,6 @@ public:
 	static constexpr uint8_t REG_PHASE = offsetof(Registers, phase);
 
 	/**
-	 * Relative address of the pattern buf register.
-	 */
-	static constexpr uint8_t REG_PATTERN_BUF = offsetof(Registers, pattern_buf);
-
-	/**
 	 * Total number of register bytes.
 	 */
 	static constexpr uint8_t N_REGS = sizeof(Registers);
@@ -379,7 +374,7 @@ public:
 		m_regs.regs.brightness = 0;
 		m_regs.regs.mask = 0xFF;
 		m_regs.regs.phase = 0;
-		m_regs.regs.pattern_buf = 0;
+		m_pattern_buf = 0;
 	}
 
 	/**
@@ -413,11 +408,11 @@ public:
 
 			// Fetch the target value and apply the offset
 			const uint8_t tar = unpack_7bit_brightness(c.brightness);
-			if (tar > r.pattern_buf) {
-				r.pattern_buf = tar - r.phase;
+			if (tar > m_pattern_buf) {
+				m_pattern_buf = tar - r.phase;
 			}
 			else {
-				r.pattern_buf = tar + r.phase;
+				m_pattern_buf = tar + r.phase;
 			}
 		}
 		else {
