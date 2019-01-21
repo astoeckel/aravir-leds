@@ -81,6 +81,19 @@ public:
 	static constexpr uint8_t BIT_STATUS_RUN = 0x80;
 
 	/**
+	 * If set in the "status" register, the control word sequence will not
+	 * directly modify the brightness register, but instead write to the "mask"
+	 * register which will be combined via "AND" with the brightness register
+	 * when setting the LED brightness. This facilitates implementation of
+	 * blinking in the Linux driver model.
+	 *
+	 * From an implementation perspective, this bit determined whether the
+	 * "pattern_buf" register will be transfered to the "mask" or the
+	 * "brightness" register.
+	 */
+	static constexpr uint8_t BIT_STATUS_BLINK = 0x40;
+
+	/**
 	 * Number of control words, must be a power of two.
 	 */
 	static constexpr uint8_t N_CTRL_WORDS = 8;
@@ -185,15 +198,31 @@ private:
 		 * The current brightness of the LED as a value between 0 and 255. Note
 		 * that the control words only support 7 bit resolution. Writing to this
 		 * value will directly affect the LED brightness. However, this will be
-		 * overriden if the LED controller is not paused at the moment.
+		 * overriden if the LED controller is not paused at the moment and the
+		 * BIT_STATUS_BLINK flag is not set.
 		 */
 		uint8_t brightness;
+
+		/**
+		 * This mask will be combined via "AND" with the status brightness
+		 * value when reading out the brightness. This is initialized to 0xFF.
+		 * If BIT_STATUS_
+		 */
+		uint8_t mask;
 
 		/**
 		 * Stores the current phase of the instruction decoder. This value is
 		 * decreasing with each call to step(). Whenever this value hits
 		 */
 		uint8_t phase;
+
+		/**
+		 * The pattern buffer will always write the current target brightness to
+		 * this register. If BIT_STATUS_BLINK is not set, it will be transfered
+		 * to the brightness register. If BIT_STATUS_BLINK is set, it will be
+		 * transfered to the "mask" register.
+		 */
+		uint8_t pattern_buf;
 
 		/**
 		 * Program memory defining the LED blink pattern.
@@ -235,9 +264,34 @@ private:
 	}
 
 	/**
+	 * Unpacks a seven bit brightness value into an 8-bit brightness value.
+	 * Ensures that "x == 0" is mapped onto zero and "x = 0x7F" is mapped onto
+	 * "0xFF", i.e. the entire dynamic range is used.
+	 */
+	static constexpr uint8_t unpack_7bit_brightness(uint8_t x)
+	{
+		return ((x & MASK_CTRL_BRIGHTNESS) << 1) | (x & 0x01);
+	}
+
+	/**
 	 * Returns a reference at the current control word.
 	 */
 	Ctrl &ctrl() { return m_regs.regs.ctrl[ptr()]; }
+
+	/**
+	 * Transfers the pattern buffer to the output.
+	 */
+	void transfer() {
+		Registers &r = m_regs.regs;
+
+		// Transfer the pattern buffer to either the "mask" or the "brightness"
+		// register
+		if (r.status & BIT_STATUS_BLINK) {
+			r.mask = r.pattern_buf;
+		} else {
+			r.brightness = r.pattern_buf;
+		}
+	}
 
 	/**
 	 * Goes to the next control word; if BIT_CTRL_RESET_SEQ is set, goes back to
@@ -266,26 +320,39 @@ private:
 		Registers &r = m_regs.regs;
 
 		// Expand the encoded brightness value to 8 bit
-		const uint8_t brightness = (c.brightness & MASK_CTRL_BRIGHTNESS) << 1;
+		const uint8_t brightness = unpack_7bit_brightness(c.brightness);
 
 		if (c.delay & BIT_CTRL_DELAY_IS_RAMP) {
 			// In ramp mode, phase encodes the difference between the current
 			// brightness value and the target brightness
-			r.phase = delta(brightness, r.brightness);
+			r.phase = delta(brightness, r.pattern_buf);
 		}
 		else {
 			// In delay mode, phase encodes the remaining delay, brightness
 			// is constant
 			r.phase = c.delay & MASK_CTRL_DELAY;
-			r.brightness = brightness;
+			r.pattern_buf = brightness;
 		}
+
+		// Transfer the pattern_buf to the output registers
+		transfer();
 	}
 
 public:
 	/**
+	 * Relative address of the status register.
+	 */
+	static constexpr uint8_t REG_STATUS = offsetof(Registers, status);
+
+	/**
 	 * Relative address of the brightness register.
 	 */
 	static constexpr uint8_t REG_BRIGHTNESS = offsetof(Registers, brightness);
+
+	/**
+	 * Relative address of the mask register.
+	 */
+	static constexpr uint8_t REG_MASK = offsetof(Registers, mask);
 
 	/**
 	 * Relative address of the phase register.
@@ -293,12 +360,12 @@ public:
 	static constexpr uint8_t REG_PHASE = offsetof(Registers, phase);
 
 	/**
-	 * Relative address of the status register.
+	 * Relative address of the pattern buf register.
 	 */
-	static constexpr uint8_t REG_STATUS = offsetof(Registers, status);
+	static constexpr uint8_t REG_PATTERN_BUF = offsetof(Registers, pattern_buf);
 
 	/**
-	 * Total number of registers.
+	 * Total number of register bytes.
 	 */
 	static constexpr uint8_t N_REGS = sizeof(Registers);
 
@@ -308,9 +375,11 @@ public:
 	 */
 	LED()
 	{
-		m_regs.regs.brightness = 0;
-		m_regs.regs.phase = 0;
 		m_regs.regs.status = 0;
+		m_regs.regs.brightness = 0;
+		m_regs.regs.mask = 0xFF;
+		m_regs.regs.phase = 0;
+		m_regs.regs.pattern_buf = 0;
 	}
 
 	/**
@@ -343,23 +412,30 @@ public:
 			r.phase = sub_saturated(r.phase, c.delay & MASK_CTRL_DELAY);
 
 			// Fetch the target value and apply the offset
-			const uint8_t tar = (c.brightness & MASK_CTRL_BRIGHTNESS) << 1;
-			if (tar > r.brightness) {
-				r.brightness = tar - r.phase;
+			const uint8_t tar = unpack_7bit_brightness(c.brightness);
+			if (tar > r.pattern_buf) {
+				r.pattern_buf = tar - r.phase;
 			}
 			else {
-				r.brightness = tar + r.phase;
+				r.pattern_buf = tar + r.phase;
 			}
 		}
 		else {
 			r.phase--;
 		}
+
+		// Write the pattern_buf register to the output
+		transfer();
 	}
 
 	/**
 	 * Returns the current LED brightness value.
 	 */
-	uint8_t brightness() const { return m_regs.regs.brightness; }
+	uint8_t brightness() const
+	{
+		const Registers &r = m_regs.regs;
+		return r.brightness & r.mask;
+	}
 
 	/**
 	 * Sets the brightness value to the given value.
@@ -438,7 +514,7 @@ public:
 				if ((value & BIT_STATUS_RUN)) {
 					run();
 				}
-				m_regs.mem[addr] = value & (BIT_STATUS_RUN | MASK_STATUS_PTR);
+				m_regs.mem[addr] = value & (BIT_STATUS_RUN | BIT_STATUS_BLINK | MASK_STATUS_PTR);
 				break;
 			default:
 				if (addr < sizeof(Registers)) {
@@ -464,12 +540,16 @@ public:
 /**
  * A set of multiple LED instances that act as a single I2C device.
  */
-template <uint8_t N_LEDS>
+template <uint8_t N_LEDS, uint8_t N_TICKS_PER_SECOND = 64>
 class MultiLED {
 private:
 	LED m_leds[N_LEDS];
 
 public:
+	/**************************************************************************
+	 * Constants                                                              *
+	 **************************************************************************/
+
 	/**
 	 * Read-only register containing the number of LEDs.
 	 */
@@ -481,9 +561,14 @@ public:
 	static constexpr uint8_t REG_LED_SIZE = 1;
 
 	/**
+	 * Number of ticks per second.
+	 */
+	static constexpr uint8_t REG_TICKS_PER_SECOND = 2;
+
+	/**
 	 * Address offset of the first LED.
 	 */
-	static constexpr uint8_t ADDR_BASE = 2;
+	static constexpr uint8_t ADDR_BASE = 3;
 
 	/**
 	 * Maximum address.
@@ -498,6 +583,15 @@ public:
 		return ADDR_BASE + LED::N_REGS * led_idx;
 	}
 
+	/**************************************************************************
+	 * MultiLED specific functionality                                        *
+	 **************************************************************************/
+
+	/**
+	 * Returns the current ticks_per_second as they are reported per I2C.
+	 */
+	static constexpr uint8_t ticks_per_second() { return N_TICKS_PER_SECOND; }
+
 	/**
 	 * Returns a const reference at the i-th LED.
 	 */
@@ -509,9 +603,13 @@ public:
 	LED &operator[](uint8_t i) { return m_leds[i]; }
 
 	/**
-	 * Returns the number of LEDs.
+	 * Returns the number of LEDs represented by the MultiLED instance.
 	 */
 	static constexpr uint8_t size() { return N_LEDS; }
+
+	/**************************************************************************
+	 * LED interface                                                          *
+	 **************************************************************************/
 
 	/**
 	 * Forwards the state of all leds in the multi LED group.
@@ -526,7 +624,8 @@ public:
 	/**
 	 * Executes the state machine for all LEDs.
 	 */
-	void run() {
+	void run()
+	{
 		for (uint8_t i = 0; i < N_LEDS; i++) {
 			m_leds[i].run();
 		}
@@ -535,7 +634,8 @@ public:
 	/**
 	 * Stops the state machine for all LEDs.
 	 */
-	void stop() {
+	void stop()
+	{
 		for (uint8_t i = 0; i < N_LEDS; i++) {
 			m_leds[i].stop();
 		}
@@ -577,6 +677,9 @@ public:
 		else if (addr == REG_LED_SIZE) {
 			return LED::N_REGS;
 		}
+		else if (addr == REG_TICKS_PER_SECOND) {
+			return N_TICKS_PER_SECOND;
+		}
 		else if (addr >= ADDR_BASE && addr < N_REGS) {
 			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
 			return m_leds[led_idx].i2c_read(addr - led_addr_base(led_idx));
@@ -593,8 +696,7 @@ public:
 	{
 		if (addr >= ADDR_BASE && addr < N_REGS) {
 			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
-			m_leds[led_idx].i2c_write(addr - led_addr_base(led_idx),
-			                          value);
+			m_leds[led_idx].i2c_write(addr - led_addr_base(led_idx), value);
 		}
 	}
 

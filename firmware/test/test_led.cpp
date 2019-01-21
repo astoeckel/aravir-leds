@@ -39,7 +39,7 @@ void test_paused() {
 void test_ctrl_simple() {
 	LED led;
 	led[0] = LED::Ctrl::set(4, 64);
-	led[1] = LED::Ctrl::set(8, 30, true);
+	led[1] = LED::Ctrl::set(8, 31, true);
 
 	EXPECT_FALSE(led.is_running());
 	EXPECT_EQ(0, led.brightness());
@@ -57,7 +57,7 @@ void test_ctrl_simple() {
 		for (uint8_t i = 0; i < 8; i++) {
 			led.step();
 			ASSERT_TRUE(led.is_running());
-			ASSERT_EQ(30, led.brightness());
+			ASSERT_EQ(31, led.brightness());
 		}
 	}
 }
@@ -65,13 +65,13 @@ void test_ctrl_simple() {
 void test_ctrl_wrap() {
 	LED led;
 	led[0] = LED::Ctrl::set(4, 64);
-	led[1] = LED::Ctrl::set(8, 30);
+	led[1] = LED::Ctrl::set(8, 31);
 	led[2] = LED::Ctrl::set(4, 64);
-	led[3] = LED::Ctrl::set(8, 30);
+	led[3] = LED::Ctrl::set(8, 31);
 	led[4] = LED::Ctrl::set(4, 64);
-	led[5] = LED::Ctrl::set(8, 30);
+	led[5] = LED::Ctrl::set(8, 31);
 	led[6] = LED::Ctrl::set(4, 64);
-	led[7] = LED::Ctrl::set(8, 30, true);
+	led[7] = LED::Ctrl::set(8, 31, true);
 
 	EXPECT_FALSE(led.is_running());
 	EXPECT_EQ(0, led.brightness());
@@ -88,7 +88,7 @@ void test_ctrl_wrap() {
 		for (uint8_t i = 0; i < 8; i++) {
 			led.step();
 			ASSERT_TRUE(led.is_running());
-			ASSERT_EQ(30, led.brightness());
+			ASSERT_EQ(31, led.brightness());
 		}
 	}
 }
@@ -96,7 +96,7 @@ void test_ctrl_wrap() {
 void test_ctrl_ramp() {
 	LED led;
 	led[0] = LED::Ctrl::ramp(3, 128);
-	led[1] = LED::Ctrl::ramp(5, 2);
+	led[1] = LED::Ctrl::ramp(5, 3);
 	led[2] = LED::Ctrl::set(4, 12, true);
 
 	EXPECT_FALSE(led.is_running());
@@ -114,7 +114,7 @@ void test_ctrl_ramp() {
 
 	for (uint8_t i = 0; i < 128; i++) {
 		for (uint8_t i = 0; i < 26; i++) {
-			ASSERT_LT(2, led.brightness());
+			ASSERT_LT(3, led.brightness());
 			led.step();
 			ASSERT_GT(128, led.brightness());
 		}
@@ -136,7 +136,7 @@ void test_ctrl_ramp() {
 
 void test_ctrl_ramp_saturated() {
 	LED led;
-	led[0] = LED::Ctrl::ramp(3, 254);
+	led[0] = LED::Ctrl::ramp(3, 255);
 	led[1] = LED::Ctrl::ramp(5, 0, true);
 
 	EXPECT_FALSE(led.is_running());
@@ -149,7 +149,7 @@ void test_ctrl_ramp_saturated() {
 	for (uint8_t i = 0; i < 128; i++) {
 
 		for (uint8_t i = 0; i < 85; i++) {
-			ASSERT_GT(254, led.brightness());
+			ASSERT_GT(255, led.brightness());
 			led.step();
 		}
 		ASSERT_EQ(254, led.brightness());
@@ -167,6 +167,7 @@ void test_multi_led() {
 	MultiLED<N_LEDS> leds;
 	EXPECT_EQ(N_LEDS, leds.i2c_read(leds.REG_N_LEDS));
 	EXPECT_EQ(LED::N_REGS, leds.i2c_read(leds.REG_LED_SIZE));
+	EXPECT_EQ(64, leds.i2c_read(leds.REG_TICKS_PER_SECOND));
 	uint8_t addr = leds.ADDR_BASE;
 	for (uint8_t i = 0; i < leds.size(); i++) {
 		for (uint8_t j = 0; j < LED::N_REGS; j++) {
