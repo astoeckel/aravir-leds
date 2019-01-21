@@ -16,7 +16,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
 #include <foxen/unittest.h>
 #include <bmc/led.hpp>
 
@@ -162,6 +161,35 @@ void test_ctrl_ramp_saturated() {
 	}
 }
 
+
+void test_blink() {
+	LED led;
+	led.brightness(63);
+	led.i2c_write(LED::REG_STATUS, LED::BIT_STATUS_BLINK);
+	led[0] = LED::Ctrl::set(4, 0xFF);
+	led[1] = LED::Ctrl::set(8, 0x00, true);
+
+	EXPECT_FALSE(led.is_running());
+	EXPECT_EQ(63, led.brightness());
+
+	led.run();
+	ASSERT_EQ(63, led.brightness());
+
+	for (uint8_t i = 0; i < 128; i++) {
+		for (uint8_t i = 0; i < 4; i++) {
+			led.step();
+			ASSERT_TRUE(led.is_running());
+			ASSERT_EQ(63, led.brightness());
+		}
+
+		for (uint8_t i = 0; i < 8; i++) {
+			led.step();
+			ASSERT_TRUE(led.is_running());
+			ASSERT_EQ(0, led.brightness());
+		}
+	}
+}
+
 template<uint8_t N_LEDS>
 void test_multi_led() {
 	MultiLED<N_LEDS> leds;
@@ -177,13 +205,13 @@ void test_multi_led() {
 	}
 }
 
-
 int main() {
 	RUN(test_paused);
 	RUN(test_ctrl_simple);
 	RUN(test_ctrl_wrap);
 	RUN(test_ctrl_ramp);
 	RUN(test_ctrl_ramp_saturated);
+	RUN(test_blink);
 	RUN(test_multi_led<0>);
 	RUN(test_multi_led<1>);
 	RUN(test_multi_led<2>);
