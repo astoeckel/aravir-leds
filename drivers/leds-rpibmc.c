@@ -100,9 +100,9 @@ static const char *rpibmc_leds_names[RPIBMC_LEDS_MAX] = {
  ******************************************************************************/
 
 static void rpibmc_leds_append_stream(u8 *regs, u8 *mask, int *ptr, u8 value,
-				      u8 valid)
+				      u8 do_mask)
 {
-	if (valid) {
+	if (do_mask) {
 		regs[*ptr] = value;
 		mask[*ptr] = 0;
 	} else {
@@ -115,8 +115,8 @@ static void rpibmc_leds_append_stream(u8 *regs, u8 *mask, int *ptr, u8 value,
  * Updates a single RPIBMC LED. Setting one of the int values to a negative
  * value indicates that this particular register shouldn't be updated.
  */
-static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
-			     int brightness, int phase,
+static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status_reg,
+			     int brightness_reg, int mask_reg, int phase_reg,
 			     struct rpibmc_leds_ctrl *ctrl, int ctrl_size)
 {
 	/* Fetch the controller data for access to the mutex lock */
@@ -129,10 +129,11 @@ static int rpibmc_leds_write(struct rpibmc_leds_led_data *led, int status,
 	int i, offs = 0, len = 0, end = 0, err = 0;
 
 	/* Assemble the masked stream */
-	rpibmc_leds_append_stream(regs, mask, &end, status, status >= 0);
-	rpibmc_leds_append_stream(regs, mask, &end, brightness,
-				  brightness >= 0);
-	rpibmc_leds_append_stream(regs, mask, &end, phase, phase >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, status_reg, status_reg >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, brightness_reg,
+				  brightness_reg >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, mask_reg, mask_reg >= 0);
+	rpibmc_leds_append_stream(regs, mask, &end, phase_reg, phase_reg >= 0);
 	for (i = 0; i < ctrl_size; i++) {
 		rpibmc_leds_append_stream(regs, mask, &end, ctrl[i].delay, 1);
 		rpibmc_leds_append_stream(regs, mask, &end, ctrl[i].brightness,
@@ -186,9 +187,10 @@ static int rpibmc_leds_set_brightness(struct led_classdev *led_cdev,
 
 	/* If the brightness is set to zero, reset the pattern engine */
 	const int status = (brightness == LED_OFF) ? 0 : -1;
+	const int mask = (brightness == LED_OFF) ? 0xFF : -1;
 
 	/* Update the brightness register, don't touch anything else */
-	return rpibmc_leds_write(led, status, brightness, -1, NULL, -1);
+	return rpibmc_leds_write(led, status, brightness, mask, -1, NULL, -1);
 }
 
 static enum led_brightness
@@ -269,7 +271,7 @@ static int rpibmc_leds_blink_set(struct led_classdev *led_cdev,
 
 	/* Send the pattern to the LED */
 	return rpibmc_leds_write(
-		led, RPIBMC_LEDS_STATUS_RUN | RPIBMC_LEDS_STATUS_BLINK, -1, -1,
+		led, RPIBMC_LEDS_STATUS_RUN | RPIBMC_LEDS_STATUS_BLINK, -1, -1, -1,
 		ctrl, i);
 }
 
