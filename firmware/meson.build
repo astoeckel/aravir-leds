@@ -16,6 +16,8 @@
 
 project('rpibmc', 'cpp', default_options : ['cpp_std=c++14'])
 
+add_project_arguments('-Wno-non-virtual-dtor', language : 'cpp')
+
 # Include directory
 inc_rpibmc = include_directories([
     '.',
@@ -26,6 +28,7 @@ inc_rpibmc = include_directories([
 dep_foxenunit = dependency(
     'libfoxenunit',
     fallback:['libfoxenunit', 'dep_foxenunit'])
+
 exe_test_led = executable(
     'test_led',
     'test/test_led.cpp',
@@ -33,4 +36,12 @@ exe_test_led = executable(
     dependencies: dep_foxenunit,
     install: false)
 test('test_led', exe_test_led)
+
+exe_test_i2c_hub = executable(
+    'test_i2c_hub',
+    'test/test_i2c_hub.cpp',
+    include_directories: inc_rpibmc,
+    dependencies: dep_foxenunit,
+    install: false)
+test('test_i2c_hub', exe_test_i2c_hub)
 
