@@ -3,7 +3,7 @@
 KVERSION := $(shell uname -r)
 PWD := $(shell pwd)
 
-obj-m := leds-rpibmc.o
+obj-m := leds-rpibmc.o gpio-rpibmc.c
 
 all:
 	+make -C /lib/modules/$(KVERSION)/build/ M=$(PWD) modules

@@ -45,3 +45,11 @@ exe_test_i2c_hub = executable(
     install: false)
 test('test_i2c_hub', exe_test_i2c_hub)
 
+exe_test_i2c_gpio = executable(
+    'test_i2c_gpio',
+    'test/test_i2c_gpio.cpp',
+    include_directories: inc_rpibmc,
+    dependencies: dep_foxenunit,
+    install: false)
+test('test_i2c_gpio', exe_test_i2c_gpio)
+
