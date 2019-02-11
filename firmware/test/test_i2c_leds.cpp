@@ -17,7 +17,7 @@
  */
 
 #include <foxen/unittest.h>
-#include <bmc/led.hpp>
+#include <bmc/i2c_leds.hpp>
 
 using namespace rpibmc;
 

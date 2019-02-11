@@ -29,13 +29,13 @@ dep_foxenunit = dependency(
     'libfoxenunit',
     fallback:['libfoxenunit', 'dep_foxenunit'])
 
-exe_test_led = executable(
-    'test_led',
-    'test/test_led.cpp',
+exe_test_i2c_leds = executable(
+    'test_i2c_leds',
+    'test/test_i2c_leds.cpp',
     include_directories: inc_rpibmc,
     dependencies: dep_foxenunit,
     install: false)
-test('test_led', exe_test_led)
+test('test_i2c_leds', exe_test_i2c_leds)
 
 exe_test_i2c_hub = executable(
     'test_i2c_hub',

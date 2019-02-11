@@ -17,7 +17,7 @@
  */
 
 /**
- * @file led.hpp
+ * @file i2c_leds.hpp
  *
  * Implements the programmable LED statemachine. Allows LEDs to blink or fade
  * according to a sequence of control words (instructions).
@@ -25,8 +25,8 @@
  * @author Andreas Stöckel
  */
 
-#ifndef RPIBMC_BMC_LED_HPP
-#define RPIBMC_BMC_LED_HPP
+#ifndef RPIBMC_BMC_I2C_LEDS_HPP
+#define RPIBMC_BMC_I2C_LEDS_HPP
 
 #include <stddef.h>
 #include <stdint.h>
@@ -206,7 +206,6 @@ private:
 		/**
 		 * This mask will be combined via "AND" with the status brightness
 		 * value when reading out the brightness. This is initialized to 0xFF.
-		 * If BIT_STATUS_
 		 */
 		uint8_t mask;
 
@@ -710,4 +709,4 @@ public:
 
 };  // namespace rpibmc
 #pragma pack(pop)
-#endif /* RPIBMC_BMC_LED_HPP */
+#endif /* RPIBMC_BMC_I2C_LEDS_HPP */
