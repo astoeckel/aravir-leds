@@ -440,12 +440,14 @@ static int rpibmc_leds_remove(struct i2c_client *client)
  * MODULE REGISTRATION                                                        *
  ******************************************************************************/
 
-static const struct i2c_device_id rpibmc_leds_id[] = { { "rpibmc-leds", 0 },
-						       {} };
+static const struct i2c_device_id rpibmc_leds_id[] = {
+	{ "rpibmc-leds", 0 },
+	{}
+};
 
 MODULE_DEVICE_TABLE(i2c, rpibmc_leds_id);
 
-static struct i2c_driver rpibmc_driver = {
+static struct i2c_driver rpibmc_leds_driver = {
     .driver =
         {
             .name = "rpibmc-leds",
@@ -455,7 +457,7 @@ static struct i2c_driver rpibmc_driver = {
     .id_table = rpibmc_leds_id,
 };
 
-module_i2c_driver(rpibmc_driver);
+module_i2c_driver(rpibmc_leds_driver);
 
 MODULE_AUTHOR("Andreas Stoeckel <andreas.stoeckel@googlemail.com>");
 MODULE_DESCRIPTION("RPIBMC LED Driver");
