@@ -1,5 +1,5 @@
 /**
- *  Board management controller (BMC) for a battery powered RPi computer
+ *  Aravir -- Linux compatiable virtual I2C devices -- LED Controller
  *  Copyright (C) 2019  Andreas Stöckel
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -17,21 +17,24 @@
  */
 
 /**
- * @file i2c_leds.hpp
+ * @file leds.hpp
  *
- * Implements the programmable LED statemachine. Allows LEDs to blink or fade
- * according to a sequence of control words (instructions).
+ * Implements a programmable LED controller statemachine. Allows LEDs to blink
+ * or fade according to a programmable sequence.
  *
  * @author Andreas Stöckel
  */
 
-#ifndef RPIBMC_BMC_I2C_LEDS_HPP
-#define RPIBMC_BMC_I2C_LEDS_HPP
+#pragma once
+
+#ifndef ARAVIR_LEDS_HPP
+#define ARAVIR_LEDS_HPP
 
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rpibmc {
+namespace aravir {
+namespace I2C {
 #pragma pack(push, 1)
 /**
  * LED controller state machine. The state machine can either be programmed
@@ -707,6 +710,7 @@ public:
 	}
 };
 
-};  // namespace rpibmc
+};  // namespace I2C
+};  // namespace aravir
 #pragma pack(pop)
-#endif /* RPIBMC_BMC_I2C_LEDS_HPP */
+#endif /* ARAVIR_LEDS_HPP */

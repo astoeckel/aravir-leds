@@ -1,5 +1,5 @@
 /**
- *  Board management controller (BMC) for a battery powered RPi computer
+ *  Aravir -- Linux compatiable virtual I2C devices -- LED Controller
  *  Copyright (C) 2019  Andreas Stöckel
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,9 @@
  */
 
 #include <foxen/unittest.h>
-#include <bmc/i2c_leds.hpp>
+#include <aravir/leds.hpp>
 
-using namespace rpibmc;
+using namespace aravir::I2C;
 
 void test_paused() {
 	LED led;

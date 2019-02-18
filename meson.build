@@ -1,4 +1,4 @@
-#  Board management controller (BMC) for a battery powered RPi computer
+#  Aravir -- Linux compatiable virtual I2C devices -- LED Controller
 #  Copyright (C) 2019  Andreas Stöckel
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -14,42 +14,22 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-project('rpibmc', 'cpp', default_options : ['cpp_std=c++14'])
 
-add_project_arguments('-Wno-non-virtual-dtor', language : 'cpp')
+project('aravir-leds', 'cpp', default_options : ['cpp_std=c++14'])
 
 # Include directory
-inc_rpibmc = include_directories([
-    '.',
-    './lib/soft323x',
-])
+inc_aravir_leds = include_directories(['.'])
 
 # Compile and register the unit tests
 dep_foxenunit = dependency(
     'libfoxenunit',
     fallback:['libfoxenunit', 'dep_foxenunit'])
 
-exe_test_i2c_leds = executable(
-    'test_i2c_leds',
-    'test/test_i2c_leds.cpp',
-    include_directories: inc_rpibmc,
+exe_test_leds = executable(
+    'test_leds',
+    'test/test_leds.cpp',
+    include_directories: inc_aravir_leds,
     dependencies: dep_foxenunit,
     install: false)
-test('test_i2c_leds', exe_test_i2c_leds)
-
-exe_test_i2c_hub = executable(
-    'test_i2c_hub',
-    'test/test_i2c_hub.cpp',
-    include_directories: inc_rpibmc,
-    dependencies: dep_foxenunit,
-    install: false)
-test('test_i2c_hub', exe_test_i2c_hub)
-
-exe_test_i2c_gpio = executable(
-    'test_i2c_gpio',
-    'test/test_i2c_gpio.cpp',
-    include_directories: inc_rpibmc,
-    dependencies: dep_foxenunit,
-    install: false)
-test('test_i2c_gpio', exe_test_i2c_gpio)
+test('test_leds', exe_test_leds)
 
