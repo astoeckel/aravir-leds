@@ -131,8 +131,7 @@ public:
 		 * @param eos if true, indicates that this is the end of the sequence.
 		 */
 		static constexpr Ctrl set(uint8_t delay, uint8_t brightness,
-		                          bool eos = false)
-		{
+		                          bool eos = false) {
 			return Ctrl{
 			    uint8_t((delay & MASK_CTRL_DELAY)),
 			    uint8_t(((brightness >> 1U) & MASK_CTRL_BRIGHTNESS) |
@@ -150,8 +149,7 @@ public:
 		 * @param eos if true, indicates that this is the end of the sequence.
 		 */
 		static constexpr Ctrl ramp(uint8_t speed, uint8_t target,
-		                           bool eos = false)
-		{
+		                           bool eos = false) {
 			return Ctrl{
 			    uint8_t((speed & MASK_CTRL_DELAY) | BIT_CTRL_DELAY_IS_RAMP),
 			    uint8_t(((target >> 1U) & MASK_CTRL_BRIGHTNESS) |
@@ -168,16 +166,14 @@ private:
 	/**
 	 * Computes max{0, a - b}.
 	 */
-	static uint8_t sub_saturated(uint8_t a, uint8_t b)
-	{
+	static uint8_t sub_saturated(uint8_t a, uint8_t b) {
 		return (b > a) ? 0 : (a - b);
 	}
 
 	/**
 	 * Computes | a - b |.
 	 */
-	static uint8_t delta(uint8_t a, uint8_t b)
-	{
+	static uint8_t delta(uint8_t a, uint8_t b) {
 		return (a > b) ? (a - b) : (b - a);
 	}
 
@@ -259,8 +255,7 @@ private:
 	 * Increments the instruction pointer. Wraps around if the end of the buffer
 	 * is reached.
 	 */
-	void ptr_incr()
-	{
+	void ptr_incr() {
 		m_regs.regs.status =
 		    (m_regs.regs.status + 1) & (~(MASK_STATUS_PTR + 1U));
 	}
@@ -270,8 +265,7 @@ private:
 	 * Ensures that "x == 0" is mapped onto zero and "x = 0x7F" is mapped onto
 	 * "0xFF", i.e. the entire dynamic range is used.
 	 */
-	static constexpr uint8_t unpack_7bit_brightness(uint8_t x)
-	{
+	static constexpr uint8_t unpack_7bit_brightness(uint8_t x) {
 		return ((x & MASK_CTRL_BRIGHTNESS) << 1) | (x & 0x01);
 	}
 
@@ -300,12 +294,10 @@ private:
 	 * the beginning of the sequence, otherwise advances the instruction
 	 * pointer. Wraps around once the end of the instruction buffer is reached.
 	 */
-	void next()
-	{
+	void next() {
 		if (ctrl().brightness & BIT_CTRL_RESET_SEQ) {
 			ptr_zero();
-		}
-		else {
+		} else {
 			ptr_incr();
 		}
 	}
@@ -315,8 +307,7 @@ private:
 	 * depending on whether the control word indicates a ramp or a delay, as
 	 * well as "brightness" if the instruction encodes a delay.
 	 */
-	void load()
-	{
+	void load() {
 		// Helper variables
 		const Ctrl &c = ctrl();
 		Registers &r = m_regs.regs;
@@ -328,8 +319,7 @@ private:
 			// In ramp mode, phase encodes the difference between the current
 			// brightness value and the target brightness
 			r.phase = delta(brightness, m_pattern_buf);
-		}
-		else {
+		} else {
 			// In delay mode, phase encodes the remaining delay, brightness
 			// is constant
 			r.phase = c.delay & MASK_CTRL_DELAY;
@@ -370,8 +360,7 @@ public:
 	 * Create and initialises a new LED instance. Initially the controller is
 	 * not running, the phase is zero, and the brightness is set to zero.
 	 */
-	LED()
-	{
+	LED() {
 		m_regs.regs.status = 0;
 		m_regs.regs.brightness = 0;
 		m_regs.regs.mask = 0xFF;
@@ -382,8 +371,7 @@ public:
 	/**
 	 * Advances the LED state machine and computes the next value.
 	 */
-	void step()
-	{
+	void step() {
 		// Helper variables
 		Registers &r = m_regs.regs;
 
@@ -412,12 +400,10 @@ public:
 			const uint8_t tar = unpack_7bit_brightness(c.brightness);
 			if (tar > m_pattern_buf) {
 				m_pattern_buf = tar - r.phase;
-			}
-			else {
+			} else {
 				m_pattern_buf = tar + r.phase;
 			}
-		}
-		else {
+		} else {
 			r.phase--;
 		}
 
@@ -428,8 +414,7 @@ public:
 	/**
 	 * Returns the current LED brightness value.
 	 */
-	uint8_t brightness() const
-	{
+	uint8_t brightness() const {
 		const Registers &r = m_regs.regs;
 		return r.brightness & r.mask;
 	}
@@ -460,8 +445,7 @@ public:
 	 * function will reload the current instruction. Does nothing if the
 	 * controller is already running.
 	 */
-	void run()
-	{
+	void run() {
 		// Do nothing if we are already running
 		if (is_running()) {
 			return;
@@ -489,8 +473,7 @@ public:
 	 * @param addr is the address that should be read. Returns zero if the
 	 * address is out of bounds.
 	 */
-	uint8_t i2c_read(uint8_t addr) const
-	{
+	uint8_t i2c_read(uint8_t addr) const {
 		// Make sure the read is not out of bounds
 		if (addr >= sizeof(Registers)) {
 			return 0U;
@@ -504,14 +487,14 @@ public:
 	 * Writes to the given address. Note that setting the "run" bit in the
 	 * status register from zero to one will re-load the current instruction.
 	 */
-	void i2c_write(uint8_t addr, uint8_t value)
-	{
+	void i2c_write(uint8_t addr, uint8_t value) {
 		switch (addr) {
 			case REG_STATUS:
 				if ((value & BIT_STATUS_RUN)) {
 					run();
 				}
-				m_regs.mem[addr] = value & (BIT_STATUS_RUN | BIT_STATUS_BLINK | MASK_STATUS_PTR);
+				m_regs.mem[addr] = value & (BIT_STATUS_RUN | BIT_STATUS_BLINK |
+				                            MASK_STATUS_PTR);
 				break;
 			default:
 				if (addr < sizeof(Registers)) {
@@ -524,8 +507,7 @@ public:
 	/**
 	 * Returns the next I2C address.
 	 */
-	uint8_t i2c_next_addr(uint8_t addr)
-	{
+	uint8_t i2c_next_addr(uint8_t addr) {
 		addr++;
 		if (addr >= sizeof(Registers)) {
 			addr = 0;
@@ -551,7 +533,7 @@ private:
 	 * @tparam T is not used; it just ensures that we do not run into the
 	 * "explicit specialization in non-namespace scope" error below.
 	 */
-	template<uint8_t I = 1, typename T=void>
+	template <uint8_t I = 1, typename T = void>
 	struct I2CAddrToLedIdx {
 		static constexpr uint8_t get(uint8_t addr) {
 			return (I * LED::N_REGS > addr)
@@ -560,11 +542,9 @@ private:
 		}
 	};
 
-	template<typename T>
+	template <typename T>
 	struct I2CAddrToLedIdx<N_LEDS == 0 ? 1 : N_LEDS, T> {
-		static constexpr uint8_t get(uint8_t addr) {
-			return N_LEDS - 1;
-		}
+		static constexpr uint8_t get(uint8_t addr) { return N_LEDS - 1; }
 	};
 
 public:
@@ -602,8 +582,7 @@ public:
 	/**
 	 * Address offset of the LED with the specified index.
 	 */
-	static constexpr uint8_t led_addr_base(uint8_t led_idx)
-	{
+	static constexpr uint8_t led_addr_base(uint8_t led_idx) {
 		return ADDR_BASE + LED::N_REGS * led_idx;
 	}
 
@@ -638,8 +617,7 @@ public:
 	/**
 	 * Forwards the state of all leds in the multi LED group.
 	 */
-	void step()
-	{
+	void step() {
 		for (uint8_t i = 0; i < N_LEDS; i++) {
 			m_leds[i].step();
 		}
@@ -648,8 +626,7 @@ public:
 	/**
 	 * Executes the state machine for all LEDs.
 	 */
-	void run()
-	{
+	void run() {
 		for (uint8_t i = 0; i < N_LEDS; i++) {
 			m_leds[i].run();
 		}
@@ -658,8 +635,7 @@ public:
 	/**
 	 * Stops the state machine for all LEDs.
 	 */
-	void stop()
-	{
+	void stop() {
 		for (uint8_t i = 0; i < N_LEDS; i++) {
 			m_leds[i].stop();
 		}
@@ -675,30 +651,24 @@ public:
 	 * statements. The given address must be greater or equal to ADDR_BASE and
 	 * smaller than N_REGS.
 	 */
-	static constexpr uint8_t i2c_addr_to_led_idx(uint8_t addr)
-	{
+	static constexpr uint8_t i2c_addr_to_led_idx(uint8_t addr) {
 		return I2CAddrToLedIdx<>::get(addr - ADDR_BASE);
 	}
 
 	/**
 	 * Reads the byte stored at the given address.
 	 */
-	uint8_t i2c_read(uint8_t addr) const
-	{
+	uint8_t i2c_read(uint8_t addr) const {
 		if (addr == REG_N_LEDS) {
 			return N_LEDS;
-		}
-		else if (addr == REG_LED_SIZE) {
+		} else if (addr == REG_LED_SIZE) {
 			return LED::N_REGS;
-		}
-		else if (addr == REG_TICKS_PER_SECOND) {
+		} else if (addr == REG_TICKS_PER_SECOND) {
 			return N_TICKS_PER_SECOND;
-		}
-		else if (addr >= ADDR_BASE && addr < N_REGS) {
+		} else if (addr >= ADDR_BASE && addr < N_REGS) {
 			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
 			return m_leds[led_idx].i2c_read(addr - led_addr_base(led_idx));
-		}
-		else {
+		} else {
 			return 0;
 		}
 	}
@@ -706,8 +676,7 @@ public:
 	/**
 	 * Writes to the given address.
 	 */
-	void i2c_write(uint8_t addr, uint8_t value)
-	{
+	void i2c_write(uint8_t addr, uint8_t value) {
 		if (addr >= ADDR_BASE && addr < N_REGS) {
 			const uint8_t led_idx = i2c_addr_to_led_idx(addr);
 			m_leds[led_idx].i2c_write(addr - led_addr_base(led_idx), value);
@@ -717,8 +686,7 @@ public:
 	/**
 	 * Returns the next I2C address.
 	 */
-	uint8_t i2c_next_addr(uint8_t addr)
-	{
+	uint8_t i2c_next_addr(uint8_t addr) {
 		addr++;
 		if (addr >= N_REGS) {
 			addr = 0;
