@@ -554,11 +554,9 @@ private:
 	template<uint8_t I = 1, typename T=void>
 	struct I2CAddrToLedIdx {
 		static constexpr uint8_t get(uint8_t addr) {
-			if (I * LED::N_REGS > addr) {
-				return I - 1;
-			} else {
-				return I2CAddrToLedIdx<I + 1, T>::get(addr);
-			}
+			return (I * LED::N_REGS > addr)
+			           ? (I - 1)
+			           : I2CAddrToLedIdx<I + 1, T>::get(addr);
 		}
 	};
 
