@@ -542,7 +542,36 @@ class MultiLED {
 private:
 	LED m_leds[N_LEDS];
 
+	/**
+	 * The I2CAddrToLedIdx structure is used by the i2c_addr_to_led_idx function
+	 * below to convert an I2C address to the corresponding LED without using
+	 * division.
+	 *
+	 * @tparam I is the "loop variable".
+	 * @tparam T is not used; it just ensures that we do not run into the
+	 * "explicit specialization in non-namespace scope" error below.
+	 */
+	template<uint8_t I = 1, typename T=void>
+	struct I2CAddrToLedIdx {
+		static constexpr uint8_t get(uint8_t addr) {
+			if (I * LED::N_REGS > addr) {
+				return I - 1;
+			} else {
+				return I2CAddrToLedIdx<I + 1, T>::get(addr);
+			}
+		}
+	};
+
+	template<typename T>
+	struct I2CAddrToLedIdx<N_LEDS == 0 ? 1 : N_LEDS, T> {
+		static constexpr uint8_t get(uint8_t addr) {
+			return N_LEDS - 1;
+		}
+	};
+
 public:
+	static_assert(N_LEDS <= 8, "MultiLED supports at most 8 LEDs.");
+
 	/**************************************************************************
 	 * Constants                                                              *
 	 **************************************************************************/
@@ -648,19 +677,9 @@ public:
 	 * statements. The given address must be greater or equal to ADDR_BASE and
 	 * smaller than N_REGS.
 	 */
-	template <uint8_t MIN_LED = 0, uint8_t MAX_LED = N_LEDS>
 	static constexpr uint8_t i2c_addr_to_led_idx(uint8_t addr)
 	{
-		constexpr uint8_t MID_LED = MIN_LED + (MAX_LED - MIN_LED) / 2;
-		if (MIN_LED > 0U && MIN_LED == MAX_LED) {
-			return uint8_t(MIN_LED - 1U); /* Always >= 0 */
-		}
-		else if (addr - ADDR_BASE < MID_LED * LED::N_REGS) {
-			return i2c_addr_to_led_idx<MIN_LED, MID_LED>(addr);
-		}
-		else {
-			return i2c_addr_to_led_idx<MID_LED + 1U, MAX_LED>(addr);
-		}
+		return I2CAddrToLedIdx<>::get(addr - ADDR_BASE);
 	}
 
 	/**
